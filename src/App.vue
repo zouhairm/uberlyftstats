@@ -1,7 +1,7 @@
 <template>
   <div id="app">
 
-    <MainPage :emailData='fetchedData'/>
+    <GraphPage :parsedRideData='fetchedData'/>
 
     <div id='about' class='about-box' v-if='showAbout'>
       <h2>About Project</h2>
@@ -40,13 +40,17 @@
   <div class='header'>
       <a @click.prevent='doLoginOrOut' class='login-link' >{{loginText}}</a>
       <span class="tooltiptext">{{loginHoverText}}</span>
+
+      <a @click.prevent='doFetch' v-if='signedIn' class='fetch-link' >Fetch</a>
   </div>
 
   </div>
 </template>
 
 <script>
-import MainPage from './components/MainPage.vue'
+/*eslint no-console: ["error", { allow: ["warn", "error"] }] */
+
+import GraphPage from './components/GraphPage.vue'
 import {fetchMetaData} from './lib/gmail.js'
 export default {
   name: 'app',
@@ -54,7 +58,7 @@ export default {
   data() {
     return {
       showAbout: false,
-      fetchedData: {counter: 0},
+      fetchedData: {allRides: []},
       GoogleUser: null,
       signedIn: this.$isAuthenticated(),
       gapiClient: null,
@@ -72,7 +76,7 @@ export default {
   },
 
   components: {
-    MainPage
+    GraphPage
   },
 
   computed: {
@@ -92,12 +96,16 @@ export default {
   },
 
   methods: {
-    doLoginOrOut()
-    {
+    doFetch(){
+      if(this.gapiClient){
+        fetchMetaData(this.gapiClient, this.fetchedData);
+      }
+    },
+    doLoginOrOut(){
       if(this.signedIn) {
         this.$logout();
         this.signedIn = false;
-        this.fetchedData = {counter: 0};
+        this.fetchedData = {allRides: []};
         this.gapiClient = null;
       }
       else {
@@ -192,6 +200,8 @@ a {
   display: flex;
   z-index: 1;
 }
+
+.fetch-link,
 .login-link {
   background: rgba(177, 197, 163, 0.50);
   padding: 5px 10px;
@@ -199,6 +209,10 @@ a {
   border-radius: 5%;
   cursor: pointer;
   z-index: 1;
+}
+
+.fetch-link{
+  left: 40px;
 }
 
 /* Tooltip text */
