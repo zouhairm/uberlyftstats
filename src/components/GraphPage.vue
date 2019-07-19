@@ -3,13 +3,13 @@
   <div class="graphs">
 
     <div class="permile-graph">
-    <Plotly :data="perMileData" :layout="perMileLayout" ></Plotly>  
+      <Plotly :data="perMileData" :layout="perMileLayout" ></Plotly>  
     </div> 
-
+<!-- 
     <div class="dist-cost-graph">
       <Plotly :data="distanceData" :layout="distanceLayout" ></Plotly>
       <Plotly :data="costData" :layout="costLayout" ></Plotly>
-    </div>
+    </div> -->
 
   </div>
 
@@ -27,59 +27,72 @@ export default {
   {
     return {
       perMileData: [],
-      distanceData: [],
-      costData: [],
-
-      costLayout: {},
-      distanceLayout: {},
       perMileLayout: {},
     }
   },
 
   created() {
-    const defaultLayout = {  
+    this.perMileLayout = {  
+      // title: 'Trip Cost/Mile',
       titlefont: {
           'size': 16,
           'color': '#ffffff',
           'family': 'Open Sans'
       },            
-      yaxis: {
-          showticklabels: true,
-          ticks:'',
-          tickfont: {'color':'white'},
-          title: '',
-          titlefont:{'color':'white'}
-      },      
-      xaxis: {
-          showticklabels: true,
-          ticks:'',
-          tickfont: {'color':'white'},
-          title: 'Date',
-          titlefont:{'color':'white'}
-      },
       font: {'color': '#fff',},
       // legend: {'orientation':'h'},
       hovermode: 'closest',
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
-      // margin:{'t': 40, 'b':20 , 'r':0, 'l': 50, 'pad': 1},
+      margin:{'t': 40, 'b':40 , 'r':0, 'l': 50, 'pad': 1},
       dragmode:'select',
-      clickmode: 'event+select'
+      clickmode: 'event+select',
+      yaxis: {
+          domain: [0.55, 1], anchor: 'x',
+          title: '$/Mile',
+          showticklabels: true,
+          ticks:'',
+          tickfont: {'color':'white'},
+          titlefont:{'color':'white'}
+      },  
+      yaxis2: {
+          domain: [0, 0.45], anchor: 'x2',
+          title: '$',
+          showticklabels: true,
+          ticks:'',
+          tickfont: {'color':'white'},
+          titlefont:{'color':'white'}
+      },    
+      yaxis3: {
+          domain: [0, 0.45], anchor: 'x3',
+          title: 'Miles',
+          showticklabels: true,
+          ticks:'',
+          tickfont: {'color':'white'},
+          titlefont:{'color':'white'}
+      },      
+      xaxis: {
+          domain: [0, 1], anchor: 'y',
+          showticklabels: true,
+          ticks:'',
+          tickfont: {'color':'white'},
+          titlefont:{'color':'white'}
+      },      
+      xaxis2: {
+          domain: [0, 0.45], anchor: 'y2',
+          showticklabels: true,
+          ticks:'',
+          tickfont: {'color':'white'},
+          titlefont:{'color':'white'}
+      },      
+      xaxis3: {
+          domain: [0.55, 1], anchor: 'y3',
+          showticklabels: true,
+          ticks:'',
+          tickfont: {'color':'white'},
+          titlefont:{'color':'white'}
+      },
     }
-
-
-    this.costLayout     = JSON.parse(JSON.stringify(defaultLayout)); //ugh, no deepcopy
-    this.costLayout.title = 'Trip Costs';
-    this.costLayout.yaxis.title = 'US $';
-
-    this.distanceLayout = JSON.parse(JSON.stringify(defaultLayout)); //ugh, no deepcopy
-    this.distanceLayout.title = 'Trip Distances'
-    this.distanceLayout.yaxis.title = 'Miles';
-
-    this.perMileLayout  = JSON.parse(JSON.stringify(defaultLayout)); //ugh, no deepcopy
-    this.perMileLayout.title = 'Trip Trip Cost/Mile'
-    this.perMileLayout.yaxis.title = '$/Mile';
-
 
   },
 
@@ -95,24 +108,21 @@ export default {
       {
         if(newParsedData && newParsedData.allRides != null && newParsedData.allRides.length > 0)
         {
-
-          this.costData     = splitify(newParsedData.allRides, 'total_usd')
-          this.distanceData = splitify(newParsedData.allRides, 'distance_miles')
-          this.perMileData  = splitify(newParsedData.allRides, 'usd_per_mile')
-
+          this.perMileData       = splitify(newParsedData.allRides, 'usd_per_mile'  , '')
+          this.perMileData.push(...splitify(newParsedData.allRides, 'total_usd'     , '2'))
+          this.perMileData.push(...splitify(newParsedData.allRides, 'distance_miles', '3'))
+          console.log(this.perMileData)
         }
         else
         {
             this.perMileData= []
-            this.distanceData= []
-            this.costData= []
         }
       }
     }
   }
 }
 
-function splitify(allRides, metric)
+function splitify(allRides, metric, i)
 {
   let dataTraces = []
 
@@ -126,6 +136,7 @@ function splitify(allRides, metric)
 
     let dataTrace = {x: rides.map(r => r['date']),
                      y: rides.map(r => r[metric]),
+                     xaxis: 'x'+i, yaxis: 'y'+i,
                      name: taxi, mode: 'markers', marker: {color},
                      }
 
@@ -153,13 +164,9 @@ function splitify(allRides, metric)
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
 
-
-.permilegraph{
-  width: 95vw;
-}
-
-.dist-cost-graph{
-  width: 95vw;
+.permile-graph .js-plotly-plot{
+  height: 87vh;
+  margin: 0 0; 
 }
 
 h3 {
