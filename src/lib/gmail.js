@@ -8,7 +8,7 @@ var Queue = require("queue-fifo");
 
 
 
-const DEBUG = true;
+const DEBUG = false;
 
 
 // const SEARCH_QUERY = 'from: "Lyft Ride Receipt" OR from: "uber receipt" OR subject: "Uber Ride Receipt"'
@@ -23,11 +23,11 @@ var THROTTLE_TIMEOUT = 200;
 
 if (DEBUG)
 {
-  MAX_NUM_EMAILS = 10;
-  MAX_EMAILS_PER_PAGE = 10;
+  MAX_NUM_EMAILS = 25;
+  MAX_EMAILS_PER_PAGE = 25;
 }
 
-import {parseEmail} from './emailParser.js'
+import {parseEmail, lumpRides} from './emailParser.js'
 
 export function fetchMetaData(gapi, output) {
 
@@ -47,7 +47,7 @@ export function fetchMetaData(gapi, output) {
   parseEmailsQueue(gapi, emailsQueue)
 
 
-  output.allRides = []
+  Object.assign(output, {allRides: [], lumpedRides: {}})
   publishData(emailsQueue, output)
 }
 
@@ -120,7 +120,12 @@ function publishData(emailsQueue, output)
   {
     batchedData.push(emailsQueue.parsedData.dequeue())
   }
-  output.allRides.push(...batchedData)
+  if(batchedData.length > 0)
+  {
+    output.allRides.push(...batchedData)
+    lumpRides(batchedData, output.lumpedRides)    
+  }
+
 
   //Recurse (but with a timeout to throttle things ...)
   setTimeout(()=> publishData(emailsQueue, output), THROTTLE_TIMEOUT)
@@ -154,5 +159,4 @@ function getMessages(gapi, query, emailsQueue, nEmails = 0)
         emailsQueue.doneSearching = true
       }
   })
-
 }
