@@ -10,13 +10,19 @@ function msgBinayDataToTxt(b64data)
   return atob(b64data.replace(/-/g, '+').replace(/_/g, '/'));
 }
 
-const NULL_RIDE =  {taxi: '?', date: '?', 
+const NULL_RIDE =  {taxi: '?', date: '?', date_email: '?',
                     total: NaN, currency: '?',
                     distance: NaN, distance_units: '?',
                     time_minutes: NaN}
 
 export 
-function parseEmail(emailPayload) {
+function parseEmail(queryResult) {
+
+
+  if(! queryResult) return NULL_RIDE
+
+  let emailPayload = queryResult.payload
+  let emailDate = queryResult.internalDate
 
   if(! emailPayload) return NULL_RIDE
 
@@ -29,14 +35,17 @@ function parseEmail(emailPayload) {
       return NULL_RIDE
     }
     return parseEmail_(msgBinayDataToTxt(emailPayload.body.data),
-                       emailPayload.mimeType)
+                       emailPayload.mimeType,
+                       emailDate)
   }
   else if('parts' in emailPayload && 'body' in emailPayload.parts[0])
   {
     //look for the html or plain one
     var part = emailPayload.parts.find(p => p.mimeType == 'text/html' || p.mimeType == 'text/plain');
     if(part) {
-      return parseEmail_(msgBinayDataToTxt(part.body.data), part.mimeType)
+      return parseEmail_(msgBinayDataToTxt(part.body.data), 
+                         part.mimeType,
+                         emailDate)
     } else {
       console.warn('did not find any data in this email ??', emailPayload)
     }
@@ -47,7 +56,7 @@ function parseEmail(emailPayload) {
 }
 
 
-function parseEmail_(emailBody, mimeType)
+function parseEmail_(emailBody, mimeType, emailDate)
 {
   //If Html, parse it and get structured text out of it
   if (mimeType.includes('html')) {
@@ -56,19 +65,30 @@ function parseEmail_(emailBody, mimeType)
 
   let taxiRide = null
 
-  if(emailBody.includes('Lyft')) {
+  if(emailBody.includes('Lyft') || emailBody.includes('lyft')) {
     taxiRide = parse_Lyft(emailBody)
   } else {
     taxiRide = parse_Uber(emailBody)
   }
 
-  unifyUnits(taxiRide)
+  unifyUnits(taxiRide, emailDate)
 
   return taxiRide
 }
 
-function unifyUnits(ride)
+function unifyUnits(ride, emailDate)
 {
+  //start with date
+  try {
+      ride.date_email = new Date(parseInt(emailDate)).toISOString().split('T')[0]    
+  } catch(e) {
+    console.error('failed to convert email date!', emailDate, e)
+  }
+  //force date to be email date!
+  if (ride.date == '?') {
+    ride.date = ride.date_email
+  }
+
   //start by distance
   let dist_conv = -1
   switch (ride.distance_units) {
@@ -132,15 +152,17 @@ function unifyUnits(ride)
     default:
         console.warn('unkown currency unit ' + ride.currency)
   }
-  //TODO: convert currencies!
 
   ride.distance_miles = ride.distance * dist_conv
   ride.total_usd = ride.total * currency_conv
 
   ride.usd_per_mile = ride.total_usd / ride.distance_miles
 }
-
-function parse_Lyft(emailBody)
+// ************************************************************
+// ************************************************************
+                function parse_Lyft(emailBody)
+// ************************************************************
+// ************************************************************
 {
   let lyftRide = Object.assign({}, NULL_RIDE)
   lyftRide.taxi = 'Lyft'
@@ -154,17 +176,29 @@ function parse_Lyft(emailBody)
       lyftRide.total = parseFloat(match[3])
 
       //Odd, Lyft receipt sometimes is missing the decimal point
-      if (!match[3].contains('.')) lyftRide.total /= 100
+      if (!match[3].includes('.')) lyftRide.total /= 100
 
     } catch { //otherwise fall back to manual stuff
-      let r = /(\w+\s+\d{1,2},\s+\d{4})/
-      let match = r.exec(emailBody)
-      lyftRide.date = new Date(Date.parse(match[1])).toISOString().split('T')[0]
+      try {
+        let r = /(\w+\s+\d{1,2},\s+\d{4})/
+        let match = r.exec(emailBody)
+        lyftRide.date = new Date(Date.parse(match[1])).toISOString().split('T')[0]
+      } catch { //nodate (well, no year), we will keep date unchanged
+        // lyftRide.date = '?' 
+      }
 
-      r = /([A-z]*\W*[A-z]*)((?:\d*[.])?\d+)\W+Pickup/
-      match = r.exec(emailBody)
-      lyftRide.currency = match[1]
-      lyftRide.total = parseFloat(match[2])
+      //ugh - hacky :s
+      try {
+        r = /([A-z]*\W*[A-z]*)((?:\d*[.])?\d+)\W+Pickup/
+        match = r.exec(emailBody)
+        lyftRide.currency = match[1]
+        lyftRide.total = parseFloat(match[2])
+      } catch {
+        r = /(?:Sub)?[T|t]otal(?: Fare| charged .+:)?\s*([A-z]*\W*[A-z]*)((?:\d*[.])?\d+)/
+        match = r.exec(emailBody)
+        lyftRide.total = parseFloat(match[2])
+        lyftRide.currency = match[1]
+      }
     }
 
     //get ride stats
@@ -180,7 +214,16 @@ function parse_Lyft(emailBody)
     lyftRide.time_minutes = time_minutes
   }
   catch (error){
-    console.warn('failed parsing a Lyft message!', emailBody, error)
+    if(emailBody.includes('Lyft Line Discount'))
+    {
+      //lyft doesn't include mileage / time stats when lyft line?
+      lyftRide.distance_units = 'mi'
+      lyftRide.time_minutes = lyftRide.distance = NaN
+    }
+    else
+    {
+      console.warn('failed parsing a Lyft message!', emailBody, error)
+    }
   }
 
   // if(lyftRide.date == '2017-06-22')
@@ -191,8 +234,11 @@ function parse_Lyft(emailBody)
   return lyftRide
 
 }
-
-function parse_Uber(emailBody)
+// ************************************************************
+// ************************************************************
+                  function parse_Uber(emailBody)
+// ************************************************************
+// ************************************************************
 {
 
   let uberRide = Object.assign({}, NULL_RIDE)
@@ -208,14 +254,15 @@ function parse_Uber(emailBody)
   try {
     // See Example here https://regexr.com/4hnc5
     //first get the total
-    let r = /(?:Sub)?[T|t]otal(?: Fare)?\s*([A-z]*\W*[A-z]*)((?:\d*[.])?\d+)/
+    let r = /(?:Sub)?[T|t]otal(?: Fare| charged .+:)?\s*([A-z]*\W*[A-z]*)((?:\d*[.])?\d+)/
     let match = r.exec(emailBody)
     uberRide.total = parseFloat(match[2])
     uberRide.currency = match[1]
+ 
 
     //next get the distance
     try { //old style?
-      r = /Distance[\W]+((?:\d*[.])?\d+)[\s]+([A-z]+)/
+      r = /Distance[\W]+((?:\d*[.])?\d+)[\s]+([A-z]+)\n/
       match = r.exec(emailBody)
       uberRide.distance = parseFloat(match[1])
       uberRide.distance_units = match[2]
@@ -231,7 +278,8 @@ function parse_Uber(emailBody)
     } catch { //New style ??
     try {
       //next get the time and distance
-      r = /((?:\d*[.])?\d+)\s+([A-z]+)\s?\|\s?(?:(\d+)\s+h)?\s?(?:(\d+)\s+min)?\s?(?:(\d+)\s+s)?/
+      // eslint-disable-next-line 
+      r = /((?:\d*[.])?\d+)\s+([A-z]+)\s?[\||&]\s?(?:(\d+)\s+h)?\s?(?:(\d+)\s+min)?\s?(?:(\d+)\s+s)?/
       match = r.exec(emailBody)
       uberRide.distance = parseFloat(match[1])
       uberRide.distance_units = match[2]
@@ -258,20 +306,26 @@ function parse_Uber(emailBody)
       uberRide.date = new Date(Date.parse(match[1])).toISOString().split('T')[0]
     }
     catch {
-      r = /(\w+\s+\d{1,2},\s+\d{4})/
-      match = r.exec(emailBody)
-      uberRide.date = new Date(Date.parse(match[1])).toISOString().split('T')[0]
+      //one last try for the date ..
+      try
+      {
+        r = /(\w+\s+\d{1,2},\s+\d{4})/
+        match = r.exec(emailBody)
+        uberRide.date = new Date(Date.parse(match[1])).toISOString().split('T')[0]
+      // eslint-disable-next-line 
+      } catch {}
     }
 
   } catch (error2){
-      // if(!emailBody.contains('trip is canceled')) 
+      if(!emailBody.includes('trip is canceled') && 
+         !emailBody.includes('Previous Charge')) 
       {
         console.warn('failed parsing this Uber message!', emailBody, error2)
       }
     }
   }//2nd catch 
 
-  // if(uberRide.date == '2019-01-28')
+  // if(uberRide.distance_units.includes('Time'))
   // {
   //   console.log(emailBody)
   // }
@@ -286,61 +340,67 @@ function parse_Uber(emailBody)
 // var resb = {body: {data: body64, size:1}}
 // console.log(parseEmail(resb))
 
-// let res = `Thanks for riding Uber!
-// Billed To
-// Zouhair Mahboubi
-// Trip Request Date
-// December 31, 2013 at 08:55pm
-// Dropoff Location
-// 4857-4871 South Centinela Avenue, Los Angeles, CA
-// Payment
-// Google Wallet
-// Amount Charged
-// $18.00
-// Driver
-// Daniar
-// Fare Breakdown
-// Charges
-// Base Fare
-// $2.00
-// Distance
-// $10.26
-// Time
-// $6.00
-// Charge subtotal
-// $18.26
-// Discounts
-// Rounding Down
-// ($0.26)
-// Discount subtotal
-// ($0.26)
-// Totals
-// Total Fare
-// $18.00
-// Amount Charged
-// ($18.00)
-// Outstanding Balance
-// $0.00
-// Trip Statistics
-// Distance
-// 6.84 miles
-// Duration
-// 17 minutes, 8 seconds
-// Average Speed
-// 23.95 mph
-// Give $10.00, Get $10.00
-// share
-// tweet
-// email
-// Your Invite Code
-// i0z68
-// Uber Technologies, Inc.
-// 182 Howard St #8
-// San Francisco, CA 94102
-// Lost something on this ride? Retrieve it.
-// Feedback from your trip? Reply to this receipt. xidnqaiyfbp`
+// let res = `Receipt
 
-// console.log(parseHTML_Uber(res))
+// Thanks for riding Uber!
+
+// Billed To: Zouhair Mahboubi
+
+// Driver: joseph
+
+
+
+// Trip Request Date:
+//     October 24, 2013 at 07:01pm
+// Pickup Location:
+//     342 Townsend Street, San Francisco, CA
+
+// Dropoff Location:
+//     355-415 Van Ness Avenue, San Francisco, CA
+
+// Credit Card:
+//     Google Wallet
+
+//     Notes
+//     This trip has an increased fare because it was taken while surge pricing was in effect.
+
+// FARE BREAKDOWN
+
+//     Charges
+//         Base Fare:    $3.50
+//         Distance:    $4.04
+//         Time:    $4.21
+//         Surge x1.5:    $5.88
+//         Charge subtotal:    $17.63
+
+//     Discounts
+//         Rounding Down:    ($0.63)
+//         Discount subtotal:    ($0.63)
+
+
+//     Totals
+//         Total Fare:    $17.00
+//         Billed to Card:    ($17.00)
+//         Outstanding Balance:    $0.00
+
+// TRIP STATISTICS
+
+// Distance:    1.88 miles
+
+// Duration:    11 minutes, 55 seconds
+
+// Average Speed:    9.46 miles per hour
+
+// Need support? Reply to this receipt.
+
+// View this trip online: https://clients.uber.com/#!/trip/hu7wsedf
+// xidhu7wsedf
+
+//     Uber Technologies, Inc.
+//     182 Howard St #8
+//     San Francisco, CA 94102`
+
+// console.log(parse_Uber(res))
 
 
 

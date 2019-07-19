@@ -12,6 +12,7 @@ const DEBUG = true;
 
 
 // const SEARCH_QUERY = 'from: "Lyft Ride Receipt" OR from: "uber receipt" OR subject: "Uber Ride Receipt"'
+// const SEARCH_QUERY = 'from: "lyft ride receipt" before:2016' 
 const SEARCH_QUERY = 'from: "Lyft Ride Receipt" OR from: "uber receipts" OR subject: "Uber Ride Receipt"'
 
 var MAX_BATCH_SIZE = 25;
@@ -22,8 +23,8 @@ var THROTTLE_TIMEOUT = 200;
 
 if (DEBUG)
 {
-  MAX_NUM_EMAILS = 200;
-  MAX_EMAILS_PER_PAGE = 100;
+  MAX_NUM_EMAILS = 10;
+  MAX_EMAILS_PER_PAGE = 10;
 }
 
 import {parseEmail} from './emailParser.js'
@@ -78,7 +79,7 @@ function parseEmailsQueue(gapi, emailsQueue)
     let fetchQuery = gapi.client.gmail.users.messages.get({
         userId: 'me', 
         id: msgId,
-        fields: 'payload(body, mimeType, parts)',
+        fields: 'internalDate,payload(body, mimeType, parts)',
       })
     httpBatch.add(fetchQuery, {id: ('get ' + msgId)});
     batchSize++;
@@ -98,7 +99,7 @@ function parseEmailsQueue(gapi, emailsQueue)
 function handleBatchResponse(res, emailsQueue)
 {
   for (let k in res.result){
-    emailsQueue.parsedData.enqueue(parseEmail(res.result[k].result.payload))
+    emailsQueue.parsedData.enqueue(parseEmail(res.result[k].result))
   }
   emailsQueue.batchesAwaiting -= 1
   //console.log('Got results! (batches waiting: ' + emailsQueue.batchesAwaiting , res)
