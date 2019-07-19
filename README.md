@@ -1,8 +1,7 @@
 # Uber Lyft Stats
 
 This project aims to visualize lyft/uber rides by crawling email receipts.
-It is hosted on heroku (gh-pages doesn't support environment variables which are needed to safely store 
-the private key for the Google OAuth)
+It is hosted here: https://zouhairm.github.io/lyftuberstats
 
 
 You can see a sample of what the data looks like from my account (still needs to be implemented). If you would like to visualize your own data, click on the top right button to authenticate with Google and the app will fetch your data
