@@ -24,7 +24,7 @@
           </p>
 
           <p class='privacy-note'>
-          Note on Privacy and Data: The application relies on Google's OAuth2 workflow to access the emails, and therefore your login/password information is never shared with it either. Moreover, this application is <em>entirely</em> client side. This means that your data is not sent to a 3rd party server nor is it saved anywhere. If there is interest, it might in the future collect anonymized statistics (averaged values over time) from each user.
+          Note on Privacy and Data: The application relies on Google's OAuth2 workflow to access the emails, and therefore your login/password information is never shared with it either. Moreover, this application is <em>entirely</em> client side. This means that your data is not sent to a 3rd party server nor is it saved anywhere.
           </p>
       </div>
       <a href='#' @click.prevent='showAbout = false'  class='close-about' title='Close this message'>Close</a>
@@ -49,7 +49,6 @@
 
 <script>
 /*eslint no-console: ["error", { allow: ["warn", "error"] }] */
-
 import GraphPage from './components/GraphPage.vue'
 import {fetchMetaData} from './lib/gmail.js'
 export default {
@@ -57,14 +56,13 @@ export default {
 
   data() {
     return {
-      showAbout: false,
+      showAbout: true || window.location.hash.includes('privacy'),
       fetchedData: {allRides: []},
       GoogleUser: null,
       signedIn: this.$isAuthenticated(),
       gapiClient: null,
     };
   },
-
   created(){
     if (this.signedIn)
     {
